@@ -1,28 +1,216 @@
 <template>
-   <div class="app-container">
-    tag
+  <div class="app-container">
+    <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch">
+      <el-form-item label="标签名称" prop="tagName">
+        <el-input
+          v-model="queryParams.tagName"
+          placeholder="请输入标签名称"
+          clearable
+          @keyup.enter.native="handleQuery"
+        />
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
+        <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
+      </el-form-item>
+    </el-form>
+    <el-row :gutter="10" class="mb8">
+      <el-col :span="1.5">
+        <el-button
+          type="primary"
+          plain
+          icon="el-icon-plus"
+          size="mini"
+          @click="handleAdd"
+          v-hasPermi="['productManage:tag:add']"
+          >新增</el-button
+        >
+      </el-col>
+      <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
+    </el-row>
+    <el-table
+      v-if="refreshTable"
+      v-loading="loading"
+      :data="tableData"
+      row-key="tagId"
+      :default-expand-all="isExpandAll"
+      :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
+    >
+      <el-table-column prop="tagName" label="标签名称" :show-overflow-tooltip="true" width="160"></el-table-column>
+      <el-table-column label="创建时间" align="center" prop="createTime">
+        <template slot-scope="scope">
+          <span>{{ parseTime(scope.row.createTime) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
+        <template slot-scope="scope">
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-edit"
+            @click="handleUpdate(scope.row)"
+            v-hasPermi="['productManage:tag:edit']"
+            >修改</el-button
+          >
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-delete"
+            @click="handleDelete(scope.row)"
+            v-hasPermi="['productManage:tag:remove']"
+            >删除</el-button
+          >
+        </template>
+      </el-table-column>
+    </el-table>
+    <!-- 添加或修改菜单对话框 -->
+    <el-dialog :title="title" :visible.sync="open" width="680px" append-to-body>
+      <el-form ref="form" :model="form" :rules="rules" label-width="100px">
+        <el-row>
+          <el-col :span="24">
+            <el-form-item label="标签名称" prop="tagName">
+              <el-input v-model="form.tagName" placeholder="请输入标签名称" maxlength="20" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="submitForm">确 定</el-button>
+        <el-button @click="cancel">取 消</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script>
+import _ from 'lodash'
+const list = [
+  { tagId: 1, tagName: '标签1', createTime: 1585228800000 },
+  { tagId: 2, tagName: '标签2', createTime: 1585228800000 },
+  { tagId: 3, tagName: '标签2-1', createTime: 1585228800000 },
+  { tagId: 4, tagName: '标签2-2', createTime: 1585228800000 }
+]
 export default {
-  components: {
-
-  },
-  props: {
-
-  },
+  props: {},
   data() {
-      return {
-
-      };
+    return {
+      loading: false,
+      tableData: [],
+      showSearch: true,
+      // 弹出层标题
+      title: '',
+      // 是否显示弹出层
+      open: false,
+      // 是否展开，默认全部折叠
+      isExpandAll: false,
+      // 重新渲染表格状态
+      refreshTable: true,
+      queryParams: {
+        tagName: ''
+      },
+      tagOptions: [],
+      // 表单参数
+      form: {},
+      // 表单校验
+      rules: {
+        tagName: [{ required: true, message: '标签名称不能为空', trigger: 'blur' }]
+      }
+    }
+  },
+  mounted() {
+    this.getList()
   },
   methods: {
+    /** 转换菜单数据结构 */
+    normalizer(node) {
+      if (node.children && !node.children.length) {
+        delete node.children
+      }
+      return {
+        id: node.tagId,
+        label: node.tagName,
+        children: node.children
+      }
+    },
+    /** 搜索按钮操作 */
+    handleQuery() {
+      this.getList()
+    },
+    /** 重置按钮操作 */
+    resetQuery() {
+      this.resetForm('queryForm')
+      this.handleQuery()
+    },
+    // 取消按钮
+    cancel() {
+      this.open = false
+      this.reset()
+    },
+    // 表单重置
+    reset() {
+      this.form = {
+        tagId: undefined,
+        tagName: undefined
+      }
+      this.resetForm('form')
+    },
+    getList() {
+      this.loading = true
+      setTimeout(() => {
+        this.loading = false
+        this.tableData = list
+      }, 1000)
+    },
+    /** 新增按钮操作 */
+    handleAdd() {
+      this.reset()
+      this.open = true
+      this.title = '添加标签'
+    },
+    /** 修改按钮操作 */
+    handleUpdate(row) {
+      this.reset()
+      this.form = _.cloneDeep(row)
+      console.log(`🚀 ~  this.form :`, this.form)
 
-  },
+      this.open = true
+      this.title = '修改标签'
+    },
+    /** 删除按钮操作 */
+    handleDelete(row) {
+      this.$modal
+        .confirm('是否确认删除名称为"' + row.tagName + '"的数据项？')
+        .then(function () {
+          // return delMenu(row.tagId);
+        })
+        .then(() => {
+          this.getList()
+          this.$modal.msgSuccess('删除成功')
+        })
+        .catch(() => {})
+    },
+    /** 提交按钮 */
+    submitForm: function () {
+      this.$refs['form'].validate(valid => {
+        if (valid) {
+          if (this.form.tagId != undefined) {
+            // updateMenu(this.form).then(response => {
+            //   this.$modal.msgSuccess('修改成功')
+            //   this.open = false
+            //   this.getList()
+            // })
+          } else {
+            // addMenu(this.form).then(response => {
+            //   this.$modal.msgSuccess('新增成功')
+            //   this.open = false
+            //   this.getList()
+            // })
+          }
+        }
+      })
+    }
+  }
 }
 </script>
 
-<style lang="scss" scoped>
-
-</style>
+<style lang="scss" scoped></style>
