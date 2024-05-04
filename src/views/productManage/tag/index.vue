@@ -1,13 +1,8 @@
 <template>
   <div class="app-container">
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch">
-      <el-form-item label="标签名称" prop="tagName">
-        <el-input
-          v-model="queryParams.tagName"
-          placeholder="请输入标签名称"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
+      <el-form-item label="标签名称" prop="tag">
+        <el-input v-model="queryParams.tag" placeholder="请输入标签名称" clearable @keyup.enter.native="handleQuery" />
       </el-form-item>
       <el-form-item>
         <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
@@ -32,11 +27,11 @@
       v-if="refreshTable"
       v-loading="loading"
       :data="tableData"
-      row-key="tagId"
+      row-key="id"
       :default-expand-all="isExpandAll"
       :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
     >
-      <el-table-column prop="tagName" label="标签名称" :show-overflow-tooltip="true" width="160"></el-table-column>
+      <el-table-column prop="tag" label="标签名称" :show-overflow-tooltip="true" width="160"></el-table-column>
       <el-table-column label="创建时间" align="center" prop="createTime">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.createTime) }}</span>
@@ -63,13 +58,20 @@
         </template>
       </el-table-column>
     </el-table>
+    <pagination
+      v-show="total > 0"
+      :total="total"
+      :page.sync="queryParams.pageNum"
+      :limit.sync="queryParams.pageSize"
+      @pagination="getList"
+    />
     <!-- 添加或修改菜单对话框 -->
     <el-dialog :title="title" :visible.sync="open" width="680px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="100px">
         <el-row>
           <el-col :span="24">
-            <el-form-item label="标签名称" prop="tagName">
-              <el-input v-model="form.tagName" placeholder="请输入标签名称" maxlength="20" />
+            <el-form-item label="标签名称" prop="tag">
+              <el-input v-model="form.tag" placeholder="请输入标签名称" maxlength="20" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -84,12 +86,8 @@
 
 <script>
 import _ from 'lodash'
-const list = [
-  { tagId: 1, tagName: '标签1', createTime: 1585228800000 },
-  { tagId: 2, tagName: '标签2', createTime: 1585228800000 },
-  { tagId: 3, tagName: '标签2-1', createTime: 1585228800000 },
-  { tagId: 4, tagName: '标签2-2', createTime: 1585228800000 }
-]
+import { createTag, deleteTag, updateTag, listTag } from '@/api/product'
+
 export default {
   props: {},
   data() {
@@ -106,14 +104,16 @@ export default {
       // 重新渲染表格状态
       refreshTable: true,
       queryParams: {
-        tagName: ''
+        tag: '',
+        pageNum: 1,
+        pageSize: 10
       },
-      tagOptions: [],
+      total: 0,
       // 表单参数
       form: {},
       // 表单校验
       rules: {
-        tagName: [{ required: true, message: '标签名称不能为空', trigger: 'blur' }]
+        tag: [{ required: true, message: '标签名称不能为空', trigger: 'blur' }]
       }
     }
   },
@@ -121,17 +121,6 @@ export default {
     this.getList()
   },
   methods: {
-    /** 转换菜单数据结构 */
-    normalizer(node) {
-      if (node.children && !node.children.length) {
-        delete node.children
-      }
-      return {
-        id: node.tagId,
-        label: node.tagName,
-        children: node.children
-      }
-    },
     /** 搜索按钮操作 */
     handleQuery() {
       this.getList()
@@ -149,17 +138,18 @@ export default {
     // 表单重置
     reset() {
       this.form = {
-        tagId: undefined,
-        tagName: undefined
+        id: undefined,
+        tag: undefined
       }
       this.resetForm('form')
     },
     getList() {
       this.loading = true
-      setTimeout(() => {
+      listTag(this.queryParams).then(response => {
         this.loading = false
-        this.tableData = list
-      }, 1000)
+        this.tableData = response.rows
+        this.total = response.total
+      })
     },
     /** 新增按钮操作 */
     handleAdd() {
@@ -179,9 +169,9 @@ export default {
     /** 删除按钮操作 */
     handleDelete(row) {
       this.$modal
-        .confirm('是否确认删除名称为"' + row.tagName + '"的数据项？')
+        .confirm('是否确认删除名称为"' + row.tag + '"的数据项？')
         .then(function () {
-          // return delMenu(row.tagId);
+          return deleteTag({ ids: [row.id] })
         })
         .then(() => {
           this.getList()
@@ -193,18 +183,18 @@ export default {
     submitForm: function () {
       this.$refs['form'].validate(valid => {
         if (valid) {
-          if (this.form.tagId != undefined) {
-            // updateMenu(this.form).then(response => {
-            //   this.$modal.msgSuccess('修改成功')
-            //   this.open = false
-            //   this.getList()
-            // })
+          if (this.form.id != undefined) {
+            updateTag(this.form).then(response => {
+              this.$modal.msgSuccess('修改成功')
+              this.open = false
+              this.getList()
+            })
           } else {
-            // addMenu(this.form).then(response => {
-            //   this.$modal.msgSuccess('新增成功')
-            //   this.open = false
-            //   this.getList()
-            // })
+            createTag(this.form).then(response => {
+              this.$modal.msgSuccess('新增成功')
+              this.open = false
+              this.getList()
+            })
           }
         }
       })

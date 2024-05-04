@@ -1,13 +1,8 @@
 <template>
   <div class="app-container">
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch">
-      <el-form-item label="类目名称" prop="categoryName">
-        <el-input
-          v-model="queryParams.categoryName"
-          placeholder="请输入类目名称"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
+      <el-form-item label="类目名称" prop="name">
+        <el-input v-model="queryParams.name" placeholder="请输入类目名称" clearable @keyup.enter.native="handleQuery" />
       </el-form-item>
       <el-form-item>
         <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
@@ -35,11 +30,11 @@
       v-if="refreshTable"
       v-loading="loading"
       :data="tableData"
-      row-key="categoryId"
+      row-key="id"
       :default-expand-all="isExpandAll"
       :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
     >
-      <el-table-column prop="categoryName" label="类目名称" :show-overflow-tooltip="true" width="160"></el-table-column>
+      <el-table-column prop="name" label="类目名称" :show-overflow-tooltip="true" width="160"></el-table-column>
       <el-table-column label="创建时间" align="center" prop="createTime">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.createTime) }}</span>
@@ -78,20 +73,20 @@
     <el-dialog :title="title" :visible.sync="open" width="680px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="100px">
         <el-row>
-          <el-col :span="24">
-            <el-form-item label="上级菜单" prop="parentId">
+          <!-- <el-col :span="24">
+            <el-form-item label="上级菜单" prop="pid">
               <treeselect
-                v-model="form.parentId"
+                v-model="form.pid"
                 :options="categoryOptions"
                 :normalizer="normalizer"
                 :show-count="true"
                 placeholder="选择上级类目"
               />
             </el-form-item>
-          </el-col>
+          </el-col> -->
           <el-col :span="24">
-            <el-form-item label="类目名称" prop="categoryName">
-              <el-input v-model="form.categoryName" placeholder="请输入类目名称" maxlength="20" />
+            <el-form-item label="类目名称" prop="name">
+              <el-input v-model="form.name" placeholder="请输入类目名称" maxlength="20" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -108,12 +103,8 @@
 import Treeselect from '@riophae/vue-treeselect'
 import '@riophae/vue-treeselect/dist/vue-treeselect.css'
 import _ from 'lodash'
-const list = [
-  { categoryId: 1, categoryName: '类目1', parentId: 0, createTime: 1585228800000 },
-  { categoryId: 2, categoryName: '类目2', parentId: 0, createTime: 1585228800000 },
-  { categoryId: 3, categoryName: '类目2-1', parentId: 2, createTime: 1585228800000 },
-  { categoryId: 4, categoryName: '类目2-2', parentId: 2, createTime: 1585228800000 }
-]
+import { createCategory, deleteCategory, updateCategory, listCategory } from '@/api/product'
+
 export default {
   components: { Treeselect },
   props: {},
@@ -131,14 +122,14 @@ export default {
       // 重新渲染表格状态
       refreshTable: true,
       queryParams: {
-        categoryName: ''
+        name: ''
       },
       categoryOptions: [],
       // 表单参数
       form: {},
       // 表单校验
       rules: {
-        categoryName: [{ required: true, message: '类目名称不能为空', trigger: 'blur' }]
+        name: [{ required: true, message: '类目名称不能为空', trigger: 'blur' }]
       }
     }
   },
@@ -152,8 +143,8 @@ export default {
         delete node.children
       }
       return {
-        id: node.categoryId,
-        label: node.categoryName,
+        id: node.id,
+        label: node.name,
         children: node.children
       }
     },
@@ -161,8 +152,8 @@ export default {
     getTreeselect() {
       setTimeout(() => {
         this.categoryOptions = []
-        const menu = { categoryId: 0, categoryName: '主类目', children: [] }
-        menu.children = this.handleTree(list, 'categoryId')
+        const menu = { id: 0, name: '主类目', children: [] }
+        menu.children = this.handleTree(list, 'id')
         this.categoryOptions.push(menu)
       }, 1000)
     },
@@ -183,27 +174,27 @@ export default {
     // 表单重置
     reset() {
       this.form = {
-        categoryId: undefined,
-        parentId: 0,
-        categoryName: undefined
+        id: undefined,
+        pid: 0,
+        name: undefined
       }
       this.resetForm('form')
     },
     getList() {
       this.loading = true
-      setTimeout(() => {
+      listCategory(this.queryParams).then(response => {
         this.loading = false
-        this.tableData = this.handleTree(list, 'categoryId')
-      }, 1000)
+        this.tableData = response.rows
+      })
     },
     /** 新增按钮操作 */
     handleAdd(row) {
       this.reset()
-      this.getTreeselect()
-      if (row != null && row.categoryId) {
-        this.form.parentId = row.categoryId
+      // this.getTreeselect()
+      if (row != null && row.id) {
+        this.form.pid = row.id
       } else {
-        this.form.parentId = 0
+        this.form.pid = 0
       }
       this.open = true
       this.title = '添加类目'
@@ -211,7 +202,7 @@ export default {
     /** 修改按钮操作 */
     handleUpdate(row) {
       this.reset()
-      this.getTreeselect()
+      // this.getTreeselect()
       this.form = _.cloneDeep(row)
       console.log(`🚀 ~  this.form :`, this.form)
 
@@ -221,9 +212,9 @@ export default {
     /** 删除按钮操作 */
     handleDelete(row) {
       this.$modal
-        .confirm('是否确认删除名称为"' + row.categoryName + '"的数据项？')
+        .confirm('是否确认删除名称为"' + row.name + '"的数据项？')
         .then(function () {
-          // return delMenu(row.categoryId);
+          return deleteCategory(row.id);
         })
         .then(() => {
           this.getList()
@@ -232,21 +223,21 @@ export default {
         .catch(() => {})
     },
     /** 提交按钮 */
-    submitForm: function () {
+    submitForm() {
       this.$refs['form'].validate(valid => {
         if (valid) {
-          if (this.form.categoryId != undefined) {
-            // updateMenu(this.form).then(response => {
-            //   this.$modal.msgSuccess('修改成功')
-            //   this.open = false
-            //   this.getList()
-            // })
+          if (this.form.id != undefined) {
+            updateCategory(this.form).then(response => {
+              this.$modal.msgSuccess('修改成功')
+              this.open = false
+              this.getList()
+            })
           } else {
-            // addMenu(this.form).then(response => {
-            //   this.$modal.msgSuccess('新增成功')
-            //   this.open = false
-            //   this.getList()
-            // })
+            createCategory(this.form).then(response => {
+              this.$modal.msgSuccess('新增成功')
+              this.open = false
+              this.getList()
+            })
           }
         }
       })
